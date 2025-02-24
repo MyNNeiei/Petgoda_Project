@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class PetgodawebsiteConfig(AppConfig):
+class PetgodaConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'petgodaWebsite'
+    name = 'petgoda'
