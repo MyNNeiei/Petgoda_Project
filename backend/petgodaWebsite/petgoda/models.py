@@ -10,6 +10,12 @@ def profile_upload_path(instance, filename): # เอาไว้ upload รู�
     new_filename = f"{instance.user.username}-{filename}"
     return f'profile_pictures/{new_filename}'
 
+class Location(models.Model):
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+
+    def __str__(self):
+        return f"({self.latitude}, {self.longitude})"
 class Usersdetail(models.Model):
     class Gender(models.TextChoices):
         M = "M", "ผู้ชาย"
@@ -22,44 +28,18 @@ class Usersdetail(models.Model):
         PETOWNER = "PetOwner", "ผู้ใช้ทั่วไป"
         HOTEL = "Hotel", "โรงแรม"
 
-    class Status(models.TextChoices):
-        ACTIVE = "active", "ใช้งานอยู่"
-        INACTIVE = "inactive", "ไม่ได้ใช้งาน"
-        BANNED = "banned", "ถูกระงับ"
-
     user = models.OneToOneField(User, on_delete=models.PROTECT)
-    birth_date = models.DateField()
-    phone_number = models.CharField(max_length=10, null=True, unique=True)
-    gender = models.CharField(max_length=10, choices=Gender.choices)
+    birth_date = models.DateField(blank=True, null=True)
+    phone_number = models.CharField(max_length=10, null=True, blank=True, unique=True)
+    gender = models.CharField(max_length=10, choices=Gender.choices, default=Gender.O, blank=True, null=True)
     picture = models.ImageField(upload_to=profile_upload_path, blank=True, null=True)
-    role = models.CharField(max_length=10, choices=Role.choices)
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.PETOWNER)
     created_at = models.DateTimeField(auto_now_add=True)
-    street_address = models.CharField(max_length=255, null=True, blank=True)
-    sub_district = models.CharField(max_length=100, null=True, blank=True)
-    district = models.CharField(max_length=100, null=True, blank=True)
-    province = models.CharField(max_length=100, null=True, blank=True)
-    postal_code = models.CharField(max_length=5, null=True, blank=True)
-    country = models.CharField(max_length=100, null=True, blank=True, default="Thailand")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True)  # Make location optional
 
     def get_full_name(self):
         return f"{self.user.first_name} {self.user.last_name}"
 
-    def get_full_address(self):
-        address_parts = [
-            self.street_address, self.sub_district, self.district,
-            self.province, self.postal_code, self.country
-        ]
-        return ", ".join(filter(None, address_parts))  # รวมที่อยู่โดยไม่ให้มีช่องว่างเกิน
-    def get_full_name(self):
-        return f"{self.user.first_name} {self.user.last_name}"
-
-class Location(models.Model):
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-
-    def __str__(self):
-        return f"({self.latitude}, {self.longitude})"
 
 class Pet(models.Model):
     class PetType(models.TextChoices):
@@ -77,8 +57,8 @@ class Pet(models.Model):
     height = models.DecimalField(
         max_digits=5, 
         decimal_places=2, )
-    allegic = models.CharField(max_length=255, null=True, unique=True)
-    properties = models.CharField(max_length=255, null=True, unique=True)
+    allegic = models.CharField(max_length=255, null=True)
+    properties = models.CharField(max_length=255, null=True)
     def __str__(self):
         return f"{self.name} ({self.get_pettype_display()}) - {self.weight} kg"
 
@@ -89,12 +69,6 @@ class Hotel(models.Model):
     phone = models.CharField(max_length=10, unique=True)
     email = models.EmailField(max_length=30, unique=True)
     website = models.URLField(max_length=200, blank=True, null=True)
-    
-    street_address = models.CharField(max_length=255)
-    sub_district = models.CharField(max_length=100)
-    district = models.CharField(max_length=100)
-    province = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=5)
     
     location = models.OneToOneField(Location, on_delete=models.CASCADE)  # ✅ แก้ไข FK location
 
