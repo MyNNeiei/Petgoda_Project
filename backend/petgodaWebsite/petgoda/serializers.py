@@ -2,8 +2,8 @@ from rest_framework import serializers
 from .models import *
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from rest_framework import serializers
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -55,6 +55,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             phone_number=phone_number,
             birth_date=birth_date
         )
+        print(user)
         return user
 
 class LoginSerializer(serializers.Serializer):
@@ -75,9 +76,6 @@ class LoginSerializer(serializers.Serializer):
         data['user'] = user
         return data
 
-# ✅ Serializer for User Profile (Usersdetail model)
-from rest_framework import serializers
-from .models import Usersdetail  # Ensure Usersdetail is correctly defined
 
 class ProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
@@ -88,6 +86,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)  
     birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
     profile_pic = serializers.ImageField(required=False, allow_null=True)  # Fixed ImageField issue
+
 
     class Meta:
         model = Usersdetail
@@ -116,38 +115,41 @@ class PetSerializer(serializers.ModelSerializer):
         model = Pet
         fields = '__all__'
 
-# class RegisterSerializer(serializers.ModelSerializer):
-#     gender = serializers.CharField()
-#     phone_number = serializers.CharField()
-#     birth_date = serializers.DateField()
-#     image_profile = serializers.ImageField(required=False)
+class ProfileEditSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source="user.first_name", required=False)
+    last_name = serializers.CharField(source="user.last_name", required=False)
+    email = serializers.EmailField(source="user.email", required=False)
+    phone_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)
+    birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
+    profile_pic = serializers.ImageField(required=False, allow_null=True)
 
-#     class Meta:
-#         model = User
-#         fields = ["username", "email", "password", "gender", "phone_number", "birth_date", "image_profile"]
-#         extra_kwargs = {"password": {"write_only": True}}
+    class Meta:
+        model = Usersdetail
+        fields = ["first_name", "last_name", "email", "phone_number", "birth_date", "gender", "profile_pic"]
 
-#     def create(self, validated_data):
-#         user = User(
-#             username=validated_data["username"],
-#             email=validated_data["email"]
-#         )
-#         user.set_password(validated_data["password"])
-#         user.save()
+    def update(self, instance, validated_data):
+        """
+        Updates both the `Usersdetail` model and the linked `User` model.
+        """
 
-#         Usersdetail.objects.create(
-#             user=user,
-#             gender=validated_data["gender"],
-#             phone_number=validated_data["phone_number"],
-#             birth_date=validated_data["birth_date"],
-#             image_profile=validated_data.get("image_profile")
-#         )
+        # Get associated User model
+        user = instance.user
 
-#         # Assign to customer group
-#         customer_group, _ = Group.objects.get_or_create(name="Customer")
-#         user.groups.add(customer_group)
+        # Update User model fields using validated_data directly
+        user.first_name = validated_data.get('user', {}).get('first_name', user.first_name) # Use .get() to handle missing fields gracefully.
+        user.last_name = validated_data.get('user', {}).get('last_name', user.last_name)
+        user.email = validated_data.get('user', {}).get('email', user.email)
+        user.save()
 
-#         return user
+        # Update Usersdetail fields
+        instance.phone_number = validated_data.get('phone_number', instance.phone_number) #Use .get() here too.
+        instance.gender = validated_data.get('gender', instance.gender)
+        instance.birth_date = validated_data.get('birth_date', instance.birth_date)
+        instance.profile_pic = validated_data.get('profile_pic', instance.profile_pic)
+        instance.save()
+
+        return instance
 
 class HotelSerializer(serializers.ModelSerializer):
     class Meta:

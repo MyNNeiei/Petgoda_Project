@@ -8,7 +8,7 @@ from .serializers import RegisterSerializer, LoginSerializer
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.contrib.auth.password_validation import validate_password
 from .models import *
 from .serializers import *
@@ -30,7 +30,7 @@ def register(request):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-
+    print("🚨 Validation Errors:", serializer.errors)
     return Response({
         'errors': serializer.errors,
         'message': 'Invalid registration data'
@@ -66,20 +66,29 @@ def logout(request):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET', 'POST'])
+@api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
-def profile_view(request):
+def profile_view(request, id=None):
     if request.method == 'GET':
         try:
-            profile = request.user.profile
+            if id:  # Fetch another user's profile if `id` is provided
+                profile = Usersdetail.objects.get(user__id=id)
+            else:  # Fetch the current user's profile
+                profile = request.user.profile
             serializer = ProfileSerializer(profile)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except Usersdetail.DoesNotExist:
+        except ObjectDoesNotExist:
             return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    elif request.method == 'POST':
-        serializer = ProfileSerializer(data=request.data)
+    elif request.method == 'PUT':
+        try:
+            profile = request.user.profile  # Check if a profile already exists
+            serializer = ProfileSerializer(profile, data=request.data, partial=True)  # Update existing profile
+        except ObjectDoesNotExist:
+            serializer = ProfileSerializer(data=request.data)  # Create new profile
+
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            serializer.save(user=request.user)  # Ensure profile is linked to user
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
