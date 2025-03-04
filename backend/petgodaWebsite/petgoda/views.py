@@ -12,6 +12,8 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from .models import *
 from .serializers import *
+from rest_framework import generics
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -83,3 +85,12 @@ def profile_view(request):
             serializer.save(user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+def admin_view(request):
+    
+    return Response("This is the admin page of petgoda app")
+
+@api_view(["POST"])  # รองรับเฉพาะ POST
+@permission_classes([IsAuthenticated])  # ต้อง Login ก่อนถึงเข้าได้
+def admin_page_view(request):
+    return Response({"message": "Welcome to the admin page!"})

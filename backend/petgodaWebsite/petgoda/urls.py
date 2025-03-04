@@ -9,6 +9,7 @@ urlpatterns = [
     path('register/', views.register, name='register'),
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
+    path('adminPage/', views.admin_page_view, name='adminPage'),
 ]
 
 # Serve media files in debug mode

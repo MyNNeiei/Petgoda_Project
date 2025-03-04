@@ -2,8 +2,7 @@ from rest_framework import serializers
 from .models import *
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-
-from rest_framework import serializers
+from .models import Usersdetail
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -115,6 +114,17 @@ class PetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pet
         fields = '__all__'
+
+class UsersdetailSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Usersdetail
+        fields = ['id', 'user', 'birth_date', 'phone_number', 'gender', 'role', 'created_at', 'location', 'full_name']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
 
 # class RegisterSerializer(serializers.ModelSerializer):
 #     gender = serializers.CharField()
