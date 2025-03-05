@@ -16,6 +16,7 @@ class Location(models.Model):
 
     def __str__(self):
         return f"({self.latitude}, {self.longitude})"
+    
 class Usersdetail(models.Model):
     class Gender(models.TextChoices):
         M = "M", "ผู้ชาย"
@@ -27,6 +28,11 @@ class Usersdetail(models.Model):
         ADMIN = "Admin", "ผู้ดูแลระบบ"
         PETOWNER = "PetOwner", "ผู้ใช้ทั่วไป"
         HOTEL = "Hotel", "โรงแรม"
+    
+    class Status(models.TextChoices):
+        ACTIVE = "Active", "ใช้งานได้"
+        BANNED = "Banned", "ถูกแบน"
+        PENDING = "Pending", "รอดำเนินการ"
 
     user = models.OneToOneField(User, on_delete=models.PROTECT)
     birth_date = models.DateField(blank=True, null=True)
@@ -34,8 +40,10 @@ class Usersdetail(models.Model):
     gender = models.CharField(max_length=10, choices=Gender.choices, default=Gender.O, blank=True, null=True)
     picture = models.ImageField(upload_to=profile_upload_path, blank=True, null=True)
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.PETOWNER)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+
     created_at = models.DateTimeField(auto_now_add=True)
-    location = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True)  # Make location optional
+    # location = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True)  # Make location optional
 
     def get_full_name(self):
         return f"{self.user.first_name} {self.user.last_name}"

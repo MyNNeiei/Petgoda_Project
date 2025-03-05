@@ -13,6 +13,8 @@ from django.contrib.auth.password_validation import validate_password
 from .models import *
 from .serializers import *
 from rest_framework import generics
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -94,12 +96,50 @@ def profile_view(request, id=None):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-def admin_view(request):
-    
-    return Response("This is the admin page of petgoda app")
 
-@api_view(["POST"])  # รองรับเฉพาะ POST
-@permission_classes([IsAuthenticated])  # ต้อง Login ก่อนถึงเข้าได้
-def admin_page_view(request):
-    return Response({"message": "Welcome to the admin page!"})
+# @api_view(['GET'])
+# @permission_classes([IsAdminUser])  # จำกัดให้เฉพาะ Admin ดูข้อมูลได้
+# def user_list(request):
+#     users = User.objects.all()
+#     serializer = UserSerializer(users, many=True)
+#     return Response(serializer.data)
+
+# @api_view(['GET'])
+# @permission_classes([IsAdminUser])
+# def user_detail(request, id):
+#     try:
+#         user = User.objects.get(id=id)
+#         profile = Usersdetail.objects.get(user=user)
+#         user_data = UserSerializer(user).data
+#         profile_data = UsersdetailSerializer(profile).data
+#         return Response({**user_data, **profile_data})
+#     except User.DoesNotExist:
+#         return Response({'error': 'User not found'}, status=404)
+#     except Usersdetail.DoesNotExist:
+#         return Response({'error': 'Profile not found'}, status=404)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # ✅ อนุญาตให้ทุกคนเข้าถึง
+def user_list(request):
+    users = User.objects.all()
+    user_data = []
+
+    for user in users:
+        user_serialized = UserSerializer(user).data
+        try:
+            profile = Usersdetail.objects.get(user=user)
+            profile_serialized = UsersdetailSerializer(profile).data
+        except Usersdetail.DoesNotExist:
+            profile_serialized = {}  # ถ้าผู้ใช้ไม่มีโปรไฟล์ ให้ส่งข้อมูลว่าง
+
+        user_data.append({**user_serialized, **profile_serialized})  # รวมข้อมูลทั้งสองส่วน
+
+    return Response(user_data)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # อนุญาตให้ทุกคนเข้าถึง
+def hotel_list(request):
+    hotels = Hotel.objects.all()  # ดึงข้อมูลโรงแรมทั้งหมด
+    serializer = HotelSerializer(hotels, many=True)  # ทำการ serialize ข้อมูลทั้งหมด
+    return Response(serializer.data)  # ส่งกลับข้อมูลทั้งหมดในรูปแบบ JSON
