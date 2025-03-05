@@ -423,3 +423,7 @@ class PetSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "pettype", "age", "birth_date", "weight", "height", "allegic", "properties", "owner", "owner_name"]
         read_only_fields = ["owner"]  # ✅ Prevent manual owner assignment
 
+class UserStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['status']  # แค่ฟิลด์สถานะที่ต้องการอัปเดต
