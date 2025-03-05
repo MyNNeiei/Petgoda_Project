@@ -3,7 +3,7 @@ from .models import *
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from rest_framework.validators import UniqueValidator
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -77,81 +77,98 @@ class LoginSerializer(serializers.Serializer):
         return data
 
 
-class ProfileSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source="user.username", read_only=True)
-    email = serializers.EmailField(source="user.email", read_only=True)
-    first_name = serializers.CharField(source="user.first_name", required=False)  
-    last_name = serializers.CharField(source="user.last_name", required=False)  
-    phone_number = serializers.CharField(required=False, allow_null=True)  
-    gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)  
-    birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
-    profile_pic = serializers.ImageField(required=False, allow_null=True)  # Fixed ImageField issue
+class UserProfileSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(source='profile.phone_number', required=False, allow_null=True)
 
-
-    class Meta:
-        model = Usersdetail
-        fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'birth_date', 'gender', 'profile_pic']
-
-
-# ✅ Serializer for User Model with Nested Profile Data
-class UserSerializer(serializers.ModelSerializer):
-    profile = ProfileSerializer(source='usersdetail', read_only=True)
+    email = serializers.EmailField(
+        validators=[UniqueValidator(
+            queryset=User.objects.all(),
+            message="This email is already registered."
+        )]
+    )
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'profile']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile_picture', 'phone_number', 'is_active']
+        read_only_fields = ['email']
+        extra_kwargs = {
+            'first_name': {'required': False},
+            'last_name': {'required': False}
+        }
 
-class UsersdetailSerializer(serializers.ModelSerializer):
-    gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)
-    phone_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    birth_date = serializers.DateField(required=False, allow_null=True)
+    def validate_username(self, value):
+        user = self.instance
+        if User.objects.exclude(pk=user.pk).filter(username=value).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return value
+    
+    def validate_phone_number(self, value):
+        if value:
+            # ลบช่องว่างและตัวอักษรพิเศษออก
+            cleaned_number = ''.join(filter(str.isdigit, value))
+            
+            # ตรวจสอบความยาวเบอร์โทร
+            if len(cleaned_number) != 10:
+                raise serializers.ValidationError("Phone number must be 10 digits")
+            
+            # ตรวจสอบว่าขึ้นต้นด้วย 0
+            if not cleaned_number.startswith('0'):
+                raise serializers.ValidationError("Phone number must start with 0")
+            
+            # ส่งคืนในรูปแบบที่ต้องการ
+            return f"{cleaned_number[0:3]}-{cleaned_number[3:6]}-{cleaned_number[6:]}"
+        return value
+    
+    def get_profile_picture(self, obj):
+        if obj.profile.picture:
+            request = self.context.get('request')
+            picture_url = obj.profile.picture.url
 
-    class Meta:
-        model = Usersdetail
-        fields = ['gender', 'phone_number', 'birth_date']
-
-class PetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Pet
-        fields = '__all__'
-
-class ProfileEditSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(source="user.first_name", required=False)
-    last_name = serializers.CharField(source="user.last_name", required=False)
-    email = serializers.EmailField(source="user.email", required=False)
-    phone_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)
-    birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
-    profile_pic = serializers.ImageField(required=False, allow_null=True)
-
-    class Meta:
-        model = Usersdetail
-        fields = ["first_name", "last_name", "email", "phone_number", "birth_date", "gender", "profile_pic"]
+            if request:
+                return request.build_absolute_uri(picture_url)
+            return picture_url
+        
+        return None
 
     def update(self, instance, validated_data):
-        """
-        Updates both the `Usersdetail` model and the linked `User` model.
-        """
-
-        # Get associated User model
-        user = instance.user
-
-        # Update User model fields using validated_data directly
-        user.first_name = validated_data.get('user', {}).get('first_name', user.first_name) # Use .get() to handle missing fields gracefully.
-        user.last_name = validated_data.get('user', {}).get('last_name', user.last_name)
-        user.email = validated_data.get('user', {}).get('email', user.email)
-        user.save()
-
-        # Update Usersdetail fields
-        instance.phone_number = validated_data.get('phone_number', instance.phone_number) #Use .get() here too.
-        instance.gender = validated_data.get('gender', instance.gender)
-        instance.birth_date = validated_data.get('birth_date', instance.birth_date)
-        instance.profile_pic = validated_data.get('profile_pic', instance.profile_pic)
+        profile_data = validated_data.pop('profile', {})
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         instance.save()
 
+        profile = instance.profile
+        if profile_data:
+            if 'picture' in profile_data:
+                profile.picture = profile_data['picture']
+            if 'phone_number' in profile_data:
+                profile.phone_number = profile_data['phone_number']
+            profile.save()
+
         return instance
+
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = ['latitude', 'longitude']
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Usersdetail
+        fields = ['picture']
+
 
 class HotelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Hotel
         fields = '__all__'
+
+class ReservationSerializer(serializers.ModelSerializer):
+    pet_owner_name = serializers.CharField(source="pet_owner.username", read_only=True)
+    pet_name = serializers.CharField(source="pet.name", read_only=True)
+    room_name = serializers.CharField(source="room.name", read_only=True)
+
+    class Meta:
+        model = Reservation
+        fields = "__all__"
