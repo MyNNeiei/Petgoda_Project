@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/pets/create/", views.pet_list_create, name="pet_list_create"),
     path("api/pets/", views.pet_list_views, name="pet_list_views"),
     path("reserve/<int:reservation_id>/", views.update_reservation_status, name="update_reservation"),
+    path('adminPage/', views.admin_page_view, name='adminPage'),
 ]
 
 # Serve media files in debug mode

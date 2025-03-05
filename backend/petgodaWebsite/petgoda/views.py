@@ -15,6 +15,8 @@ from .models import *
 from .serializers import *
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.authentication import TokenAuthentication
+from rest_framework import generics
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
