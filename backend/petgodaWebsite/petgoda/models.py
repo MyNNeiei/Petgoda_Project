@@ -10,13 +10,6 @@ def profile_upload_path(instance, filename): # เอาไว้ upload รู�
     new_filename = f"{instance.user.username}-{filename}"
     return f'profile_pictures/{new_filename}'
 
-class Location(models.Model):
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-
-    def __str__(self):
-        return f"({self.latitude}, {self.longitude})"
-    
 class Usersdetail(models.Model):
     class Gender(models.TextChoices):
         M = "M", "ผู้ชาย"
@@ -43,7 +36,7 @@ class Usersdetail(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 
     created_at = models.DateTimeField(auto_now_add=True)
-    # location = models.ForeignKey(Location, on_delete=models.PROTECT, null=True, blank=True)  # Make location optional
+    address = models.CharField(max_length=255, null=True, blank=True)  # Make location optional
 
     def get_full_name(self):
         return f"{self.user.first_name} {self.user.last_name}"
@@ -78,7 +71,7 @@ class Hotel(models.Model):
     email = models.EmailField(max_length=30, unique=True)
     website = models.URLField(max_length=200, blank=True, null=True)
     
-    location = models.OneToOneField(Location, on_delete=models.CASCADE)  # ✅ แก้ไข FK location
+    address = models.CharField(max_length=255, null=True, blank=True)  # ✅ แก้ไข FK location
 
     place_id = models.CharField(max_length=1000, unique=True)
     is_verified = models.BooleanField(default=False)

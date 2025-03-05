@@ -1,8 +1,9 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.views import APIView
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticated
 from django.contrib.auth import authenticate
 from .serializers import RegisterSerializer, LoginSerializer
 from django.contrib.auth.models import User
@@ -12,6 +13,8 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.contrib.auth.password_validation import validate_password
 from .models import *
 from .serializers import *
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.authentication import TokenAuthentication
 from rest_framework import generics
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -34,6 +37,7 @@ def register(request):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+    print(serializer)
     print("🚨 Validation Errors:", serializer.errors)
     return Response({
         'errors': serializer.errors,
@@ -70,31 +74,69 @@ def logout(request):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET', 'PUT'])
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
-def profile_view(request, id=None):
+@parser_classes([MultiPartParser, FormParser])
+def profile_view(request):
     if request.method == 'GET':
         try:
-            if id:  # Fetch another user's profile if `id` is provided
-                profile = Usersdetail.objects.get(user__id=id)
-            else:  # Fetch the current user's profile
-                profile = request.user.profile
-            serializer = ProfileSerializer(profile)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except ObjectDoesNotExist:
-            return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
+            profile, created = Usersdetail.objects.get_or_create(user=request.user)
+            print("🔍 User:", request.user.username)
+            print("📸 Profile picture:", profile.picture if profile.picture else "No picture")
 
-    elif request.method == 'PUT':
+            serializer = UserProfileSerializer(request.user, context={'request': request})
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {"detail": "Failed to fetch profile data", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+@api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def edit_profile_view(request):
+    if request.method == 'PUT':
         try:
-            profile = request.user.profile  # Check if a profile already exists
-            serializer = ProfileSerializer(profile, data=request.data, partial=True)  # Update existing profile
-        except ObjectDoesNotExist:
-            serializer = ProfileSerializer(data=request.data)  # Create new profile
+            profile, created = Usersdetail.objects.get_or_create(user=request.user)
+            serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
 
+            if serializer.is_valid():
+                # Handle profile picture upload
+                if 'profile_picture' in request.FILES:
+                    if profile.picture:
+                        profile.picture.delete()  # Delete old picture
+                    profile.picture = request.FILES['profile_picture']
+                    profile.save()
+
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            print("❌ Validation Errors:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            print("❌ Server Error:", str(e))
+            return Response(
+                {"detail": "Failed to update profile"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+@api_view(["GET", "POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def reservation_list(request):
+    if request.method == "GET":
+        reservations = Reservation.objects.filter(pet_owner=request.user)
+        serializer = ReservationSerializer(reservations, many=True)
+        return Response(serializer.data)
+
+    elif request.method == "POST":
+        serializer = ReservationSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)  # Ensure profile is linked to user
+            serializer.save(pet_owner=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # @api_view(['GET'])
@@ -143,3 +185,60 @@ def hotel_list(request):
     hotels = Hotel.objects.all()  # ดึงข้อมูลโรงแรมทั้งหมด
     serializer = HotelSerializer(hotels, many=True)  # ทำการ serialize ข้อมูลทั้งหมด
     return Response(serializer.data)  # ส่งกลับข้อมูลทั้งหมดในรูปแบบ JSON
+@api_view(["PUT"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def update_reservation_status(request, reservation_id):
+    
+    try:
+        reservation = Reservation.objects.get(id=reservation_id, pet_owner=request.user)
+
+        if reservation.status != "pending":
+            return Response({"detail": "Only pending reservations can be modified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ReservationSerializer(reservation, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    except Reservation.DoesNotExist:
+        return Response({"detail": "Reservation not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pet_list_views(request):
+    """
+    ✅ GET: Retrieve all pets belonging to the logged-in user
+    ✅ POST: Add a new pet for the logged-in user
+    """
+    if request.method == "GET":
+        # ✅ Retrieve pets owned by the logged-in user
+        pets = Pet.objects.filter(owner=request.user.usersdetail)  # Assuming `Usersdetail` has OneToOne with User
+        serializer = PetSerializer(pets, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pet_list_create(request):
+    """
+    ✅ GET: Retrieve all pets belonging to the logged-in user
+    ✅ POST: Add a new pet for the logged-in user
+    """
+    if request.method == "POST":
+        try:
+            # ✅ Assign the pet to the logged-in user
+            request.data["owner"] = request.user.usersdetail.id
+            serializer = PetSerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
