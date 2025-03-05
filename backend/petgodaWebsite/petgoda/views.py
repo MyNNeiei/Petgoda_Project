@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
@@ -69,7 +70,7 @@ def logout(request):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET', 'PUT'])
+@api_view(['GET'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
@@ -87,8 +88,12 @@ def profile_view(request):
                 {"detail": "Failed to fetch profile data", "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    elif request.method == 'PUT':
+@api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def edit_profile_view(request):
+    if request.method == 'PUT':
         try:
             profile, created = Usersdetail.objects.get_or_create(user=request.user)
             serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
@@ -149,3 +154,41 @@ def update_reservation_status(request, reservation_id):
 
     except Reservation.DoesNotExist:
         return Response({"detail": "Reservation not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pet_list_views(request):
+    """
+    ✅ GET: Retrieve all pets belonging to the logged-in user
+    ✅ POST: Add a new pet for the logged-in user
+    """
+    if request.method == "GET":
+        # ✅ Retrieve pets owned by the logged-in user
+        pets = Pet.objects.filter(owner=request.user.usersdetail)  # Assuming `Usersdetail` has OneToOne with User
+        serializer = PetSerializer(pets, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pet_list_create(request):
+    """
+    ✅ GET: Retrieve all pets belonging to the logged-in user
+    ✅ POST: Add a new pet for the logged-in user
+    """
+    if request.method == "POST":
+        try:
+            # ✅ Assign the pet to the logged-in user
+            request.data["owner"] = request.user.usersdetail.id
+            serializer = PetSerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
