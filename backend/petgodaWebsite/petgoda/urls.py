@@ -9,15 +9,23 @@ urlpatterns = [
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
     path('users/', views.user_list, name='user_list'),  # ดึงข้อมูล User ทั้งหมด
-    # path('hotels/', views.hotel_detail, name='hotel-list'),
-    path('hotels/', views.hotel_list, name='hotel-list'),  # ใช้ hotel_list สำหรับดึงข้อมูลทั้งหมด
-    # path('users/<int:id>/', views.user_detail, name='user_detail'),  # ดึงข้อมูล User รายบุคคล
-    path("reserve/", views.reservation_list, name="reservation_list"),
+    #hotels reserve
+    path("hotels/", views.view_all_hotels, name="view_all_hotels"),
+    path("hotels/<int:hotel_id>", views.view_hotel_details, name="view_hotel_details"),
+    #hotel admin
+    path("hotels/create/", views.create_hotel, name="create_hotel"),
+    path("hotels/<int:hotel_id>/delete/", views.delete_hotel, name="delete_hotel"),
+    path("hotels/", views.view_all_hotels, name="view_all_hotels_manage"),
+    path('hotels/edit/<int:hotel_id>', views.update_hotel_details, name='manage_get_hotel_details'),
+    path('hotels/<int:hotel_id>/rooms/', views.hotel_rooms, name='hotel_rooms'),
+    path('hotels/<int:hotel_id>/facilities/', views.hotel_facilities, name='hotel_facilities'),
+
+    #profile
     path('profile/edit/', views.edit_profile_view, name='profile_edit'),
-    path("api/pets/create/", views.pet_list_create, name="pet_list_create"),
-    path("api/pets/", views.pet_list_views, name="pet_list_views"),
+    path("pet/create/", views.pet_list_create, name="pet_list_create"),
+    path("pet/delete/<int:pet_id>", views.pet_list_delete, name="pet_list_delete"),
+    path("pet/", views.pet_list_views, name="pet_list_views"),
     path("reserve/<int:reservation_id>/", views.update_reservation_status, name="update_reservation"),
-    # path('adminPage/', views.admin_page_view, name='adminPage'),
 ]
 
 # Serve media files in debug mode

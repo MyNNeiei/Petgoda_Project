@@ -1,199 +1,12 @@
-# from rest_framework import serializers
-# from .models import *
-# from django.contrib.auth import authenticate
-# from django.contrib.auth.models import User
-# from rest_framework_simplejwt.tokens import RefreshToken
-# from rest_framework import serializers
-# from django.contrib.auth.models import User
-# from .models import Usersdetail
-
-
-# class RegisterSerializer(serializers.ModelSerializer):
-#     email = serializers.EmailField(required=True)
-#     first_name = serializers.CharField(required=True)
-#     last_name = serializers.CharField(required=True)
-#     password = serializers.CharField(write_only=True, min_length=8)
-#     confirm_password = serializers.CharField(write_only=True, min_length=8)
-    
-#     # userdetail
-#     gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)
-#     phone_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-#     birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
-
-#     class Meta:
-#         model = User
-#         fields = ['username', 'email', 'first_name', 'last_name', 'password', 'confirm_password', 
-#                   'gender', 'phone_number', 'birth_date']
-
-#     def validate(self, data):
-#         if data['password'] != data['confirm_password']:
-#             raise serializers.ValidationError({'password': 'Passwords do not match'})
-#         if User.objects.filter(email=data['email']).exists():
-#             raise serializers.ValidationError({'email': 'This email is already in use'})
-#         return data
-
-#     def create(self, validated_data):
-#         validated_data.pop('confirm_password')  # เอาออกก่อนบันทึกข้อมูล
-
-#         # แยกข้อมูลของ Usersdetail
-#         gender = validated_data.pop('gender', Usersdetail.Gender.O)
-#         phone_number = validated_data.pop('phone_number', None)
-#         birth_date = validated_data.pop('birth_date', None)
-
-#         # สร้าง User
-#         user = User.objects.create_user(
-#             username=validated_data['username'],
-#             email=validated_data['email'],
-#             first_name=validated_data['first_name'],
-#             last_name=validated_data['last_name'],
-#             password=validated_data['password']
-#         )
-
-#         # สร้าง Usersdetail พร้อม role เป็น PETOWNER
-#         Usersdetail.objects.create(
-#             user=user,
-#             role=Usersdetail.Role.PETOWNER,
-#             gender=gender,
-#             phone_number=phone_number,
-#             birth_date=birth_date
-#         )
-#         print(user)
-#         return user
-
-# class LoginSerializer(serializers.Serializer):
-#     username = serializers.CharField()
-#     password = serializers.CharField(write_only=True)
-
-#     def validate(self, data):
-#         user = authenticate(username=data.get('username'), password=data.get('password'))
-#         if not user:
-#             raise serializers.ValidationError('Invalid username or password')
-        
-#         # Ensure Usersdetail exists
-#         Usersdetail.objects.get_or_create(user=user, defaults={
-#             'role': Usersdetail.Role.PETOWNER,
-#             'gender': Usersdetail.Gender.O
-#         })
-        
-#         data['user'] = user
-#         return data
-
-
-# class ProfileSerializer(serializers.ModelSerializer):
-#     username = serializers.CharField(source="user.username", read_only=True)
-#     email = serializers.EmailField(source="user.email", read_only=True)
-#     first_name = serializers.CharField(source="user.first_name", required=False)  
-#     last_name = serializers.CharField(source="user.last_name", required=False)  
-#     phone_number = serializers.CharField(required=False, allow_null=True)  
-#     gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)  
-#     birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
-#     profile_pic = serializers.ImageField(required=False, allow_null=True)  # Fixed ImageField issue
-
-
-#     class Meta:
-#         model = Usersdetail
-#         fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'birth_date', 'gender', 'profile_pic']
-
-
-# # ✅ Serializer for User Model with Nested Profile Data
-# class UserSerializer(serializers.ModelSerializer):
-#     profile = ProfileSerializer(source='usersdetail', read_only=True)
-
-#     class Meta:
-#         model = User
-#         fields = ['id', 'username', 'email', 'profile']
-
-# class UsersdetailSerializer(serializers.ModelSerializer):
-#     gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)
-#     phone_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-#     birth_date = serializers.DateField(required=False, allow_null=True)
-
-#     class Meta:
-#         model = Usersdetail
-#         fields = ['gender', 'phone_number', 'birth_date']
-
-# class PetSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Pet
-#         fields = '__all__'
-
-# class UsersdetailSerializer(serializers.ModelSerializer):
-#     full_name = serializers.SerializerMethodField()
-
-#     class Meta:
-#         model = Usersdetail
-#         fields = ['id', 'user', 'birth_date', 'phone_number', 'gender', 'role', 'created_at', 'location', 'full_name']
-
-#     def get_full_name(self, obj):
-#         return obj.get_full_name()
-
-
-# class ProfileEditSerializer(serializers.ModelSerializer):
-#     first_name = serializers.CharField(source="user.first_name", required=False)
-#     last_name = serializers.CharField(source="user.last_name", required=False)
-#     email = serializers.EmailField(source="user.email", required=False)
-#     phone_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-#     gender = serializers.ChoiceField(choices=Usersdetail.Gender.choices, required=False, allow_null=True)
-#     birth_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
-#     profile_pic = serializers.ImageField(required=False, allow_null=True)
-
-#     class Meta:
-#         model = Usersdetail
-#         fields = ["first_name", "last_name", "email", "phone_number", "birth_date", "gender", "profile_pic"]
-
-#     def update(self, instance, validated_data):
-#         """
-#         Updates both the `Usersdetail` model and the linked `User` model.
-#         """
-
-#         # Get associated User model
-#         user = instance.user
-
-#         # Update User model fields using validated_data directly
-#         user.first_name = validated_data.get('user', {}).get('first_name', user.first_name) # Use .get() to handle missing fields gracefully.
-#         user.last_name = validated_data.get('user', {}).get('last_name', user.last_name)
-#         user.email = validated_data.get('user', {}).get('email', user.email)
-#         user.save()
-
-#         # Update Usersdetail fields
-#         instance.phone_number = validated_data.get('phone_number', instance.phone_number) #Use .get() here too.
-#         instance.gender = validated_data.get('gender', instance.gender)
-#         instance.birth_date = validated_data.get('birth_date', instance.birth_date)
-#         instance.profile_pic = validated_data.get('profile_pic', instance.profile_pic)
-#         instance.save()
-
-#         return instance
-
-# class HotelSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Hotel
-#         fields = '__all__'
-
-# class UserSerializer(serializers.ModelSerializer):
-#     # ใช้ source เพื่อดึงข้อมูลจาก Usersdetail
-#     phone_number = serializers.CharField(source='usersdetail.phone_number', read_only=True)
-#     birth_date = serializers.DateField(source='usersdetail.birthdate', read_only=True)
-
-#     class Meta:
-#         model = User
-#         fields = ['id', 'username', 'email', 'is_staff', 'is_active', 'date_joined', 'phone_number', 'birth_date']
-
-# class HotelSerializer(serializers.ModelSerializer):
-#     # ถ้าคุณต้องการแสดงข้อมูลของ Location หรือ User สามารถใช้ Serializer ของโมเดลเหล่านั้นได้
-#     location = serializers.StringRelatedField()  # ถ้าต้องการแค่ชื่อ/ข้อมูลในที่เก็บของ Location
-#     owner = serializers.StringRelatedField()  # เช่นเดียวกับ owner ถ้าคุณต้องการแค่ชื่อผู้ใช้งาน
-
-#     class Meta:
-#         model = Hotel
-#         fields = '__all__'  # ใช้ฟิลด์ทั้งหมดจากโมเดล Hotel
-
+from decimal import Decimal
 from rest_framework import serializers
 from .models import *
 from django.contrib.auth import authenticate
+from rest_framework import serializers
 from django.contrib.auth.models import User
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.validators import UniqueValidator
-
+from datetime import date
+from django.shortcuts import get_object_or_404
 # ✅ ใช้ UsersdetailSerializer ให้แสดงข้อมูลของผู้ใช้
 class UsersdetailSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -346,6 +159,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
             # ส่งคืนในรูปแบบที่เป็นเลขล้วนๆ (ไม่มีเครื่องหมาย -)
             return cleaned_number
         return value
+    
+    def validate_phone_number(self, value):
+        if value:
+            # ลบช่องว่างและตัวอักษรพิเศษออก
+            cleaned_number = ''.join(filter(str.isdigit, value))
+
+            # ตรวจสอบความยาวเบอร์โทร
+            if len(cleaned_number) != 10:
+                raise serializers.ValidationError("Phone number must be 10 digits")
+
+            # ตรวจสอบว่าขึ้นต้นด้วย 0
+            if not cleaned_number.startswith('0'):
+                raise serializers.ValidationError("Phone number must start with 0")
+
+            # ส่งคืนในรูปแบบที่เป็นเลขล้วนๆ (ไม่มีเครื่องหมาย -)
+            return cleaned_number
+        return value
+    def validate_birth_date(self, value):
+        today = date.today()
+
+        # Ensure the birth date is not in the future
+        if value > today:
+            raise serializers.ValidationError("Birth date cannot be in the future.")
+
+        # Ensure the user is at least 18 years old
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 18:
+            raise serializers.ValidationError("You must be at least 18 years old.")
+
+        return value
 
     def get_profile_picture(self, obj):
         try:  # Handle the case where the Usersdetail might not exist yet
@@ -401,10 +244,56 @@ class UsersdetailSerializer(serializers.ModelSerializer):
         fields = ['birth_date', 'phone_number', 'gender', 'picture', 'role', 'address']
 
 
+class FacilitiesHotelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FacilitiesHotel
+        fields = '__all__'
+
+class FacilitiesRoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FacilitiesRoom
+        fields = '__all__'
+
+class RoomSerializer(serializers.ModelSerializer):
+    facilities = FacilitiesRoomSerializer(read_only=True)
+
+    class Meta:
+        model = Room
+        fields = '__all__'
+
+def hotel_upload_path(instance, filename):
+    return f'hotel_img/{instance.name}/{filename}'
+
 class HotelSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Hotel
         fields = '__all__'
+        extra_kwargs = {
+            'owner': {'required': False}  # กำหนดให้ owner ไม่จำเป็นต้องส่งมา
+        }
+
+    def get_image_url(self, obj):
+        if hasattr(obj, "imgHotel") and obj.imgHotel:
+            request = self.context.get('request')
+            image = obj.imgHotel
+            image_url = image if isinstance(image, str) else image.url
+            return request.build_absolute_uri(image_url) if request else image_url
+        return None
+
+    def validate_phone(self, value):
+        """Ensure phone number is valid (10 digits, starts with 0)"""
+        cleaned_number = ''.join(filter(str.isdigit, value))
+        if len(cleaned_number) != 10 or not cleaned_number.startswith('0'):
+            raise serializers.ValidationError("Phone number must be 10 digits and start with 0")
+        return cleaned_number
+    
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
 
 class ReservationSerializer(serializers.ModelSerializer):
     pet_owner_name = serializers.CharField(source="pet_owner.username", read_only=True)
@@ -416,10 +305,53 @@ class ReservationSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 class PetSerializer(serializers.ModelSerializer):
-    owner_name = serializers.CharField(source="owner.user.username", read_only=True)  # ✅ Show pet owner's username
-
     class Meta:
         model = Pet
-        fields = ["id", "name", "pettype", "age", "birth_date", "weight", "height", "allegic", "properties", "owner", "owner_name"]
+        fields = ["id", "name", "pettype", "age", "birth_date", "weight", "height", "allegic", "properties", "owner"]
         read_only_fields = ["owner"]  # ✅ Prevent manual owner assignment
 
+        def validate_birth_date(self, value):
+            
+            today = date.today()
+
+            # Ensure the birth date is not in the future
+            if value > today:
+                raise serializers.ValidationError("Birth date cannot be in the future.")
+
+            # Ensure the user is at least 18 years old
+            age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+            if age < 18:
+                raise serializers.ValidationError("You must be at least 18 years old.")
+            return value
+
+class PetDeleteSerializer(serializers.Serializer):
+    pet_id = serializers.IntegerField(required=True)
+
+    def validate_pet_id(self, value):
+        """Ensure pet exists and belongs to the requesting user"""
+        request = self.context["request"]
+        pet = get_object_or_404(Pet, id=value, owner=request.user)
+        return pet  # Return the pet object itself
+
+    def delete(self):
+        """Delete the validated pet"""
+        pet = self.validated_data["pet_id"]
+        pet.delete()
+        return {"detail": "Pet deleted successfully"}
+
+
+class ImgRoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImgRoom
+        fields = ["id", "image", "description"]
+
+class RoomSerializer(serializers.ModelSerializer):
+    images = ImgRoomSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Room
+        fields = [
+            "id", "hotel", "roomname", "size", "price_per_night", "rating_decimal", 
+            "total_review", "availability_status", "max_pets", "current_pets_count_int", 
+            "room_type", "allow_pet_size", "allow_pet_type", "images"
+        ]
