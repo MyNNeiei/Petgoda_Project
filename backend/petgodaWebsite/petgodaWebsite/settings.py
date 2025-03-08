@@ -25,7 +25,8 @@ SECRET_KEY = 'django-insecure-i^l5tkv+md1*o1(0b#i5b$885cxae9-(y93!yj1wjnu9m_uwwp
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
 
 
 # Application definition
@@ -143,10 +144,16 @@ REST_FRAMEWORK = {
 }
 
 
+
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    # Add your production frontend URL here
+    "http://localhost:3000",  # ✅ อนุญาต Next.js Frontend
+    "http://127.0.0.1:3000",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization']
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",  # ✅ อนุญาต Next.js
+    "http://127.0.0.1:3000",
+]

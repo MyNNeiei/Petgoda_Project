@@ -24,6 +24,17 @@ from rest_framework import status
 from .models import HotelApproval, Hotel
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
+from rest_framework import generics, permissions
+from petgoda.models import Reservation
+from petgoda.models import Reservation
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from petgoda.models import Reservation
+# from petgoda.api.serializers import ReservationSerializer # type: ignore
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -129,42 +140,46 @@ def edit_profile_view(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-@api_view(["GET", "POST"])
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from .models import Reservation
+from .serializers import ReservationSerializer
+
+@api_view(["GET"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def reservation_list(request):
-    if request.method == "GET":
+    print(f"🔍 Token in request: {request.auth}")
+    print(f"👤 User: {request.user}")
+    print(f"👤 is_authenticated: {request.user.is_authenticated}")
+    print(f"👤 is_staff (Admin): {request.user.is_staff}")
+
+    if request.user.is_staff:
+        # ✅ Admin เห็นทุก Reservation
+        reservations = Reservation.objects.all()
+    else:
+        # ✅ ผู้ใช้ทั่วไป เห็นเฉพาะของตัวเอง
         reservations = Reservation.objects.filter(pet_owner=request.user)
-        serializer = ReservationSerializer(reservations, many=True)
-        return Response(serializer.data)
 
-    elif request.method == "POST":
-        serializer = ReservationSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(pet_owner=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    print(f"📌 Reservation Data: {reservations.values('id', 'pet_owner_id', 'pet_id', 'room_id')}")
+    
+    serializer = ReservationSerializer(reservations, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
-# @api_view(['GET'])
-# @permission_classes([IsAdminUser])  # จำกัดให้เฉพาะ Admin ดูข้อมูลได้
-# def user_list(request):
-#     users = User.objects.all()
-#     serializer = UserSerializer(users, many=True)
-#     return Response(serializer.data)
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def reservation_detail(request, id):  # ✅ ต้องใช้ "id" ให้ตรงกับ URL
+    try:
+        reservation = Reservation.objects.get(id=id)
+        serializer = ReservationSerializer(reservation)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found"}, status=status.HTTP_404_NOT_FOUND)
 
-# @api_view(['GET'])
-# @permission_classes([IsAdminUser])
-# def user_detail(request, id):
-#     try:
-#         user = User.objects.get(id=id)
-#         profile = Usersdetail.objects.get(user=user)
-#         user_data = UserSerializer(user).data
-#         profile_data = UsersdetailSerializer(profile).data
-#         return Response({**user_data, **profile_data})
-#     except User.DoesNotExist:
-#         return Response({'error': 'User not found'}, status=404)
-#     except Usersdetail.DoesNotExist:
-#         return Response({'error': 'Profile not found'}, status=404)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow all users to access
@@ -262,16 +277,57 @@ def update_user_status(request, user_id):
         return Response({'status': userdetail.status}, status=status.HTTP_200_OK)
 
 
-
 @api_view(['GET'])
-@permission_classes([AllowAny])  # Allow access to anyone
+@permission_classes([AllowAny])
 def hotel_list(request):
-    hotels = Hotel.objects.all()  # Get all hotels
-    serializer = HotelSerializer(hotels, many=True)  # Serialize data
-    return Response(serializer.data)  # Return data in JSON format
+    hotels = Hotel.objects.all()
+    hotel_data = []
 
+    for hotel in hotels:
+        try:
+            approval = HotelApproval.objects.get(hotel=hotel)
+            approval_status = approval.status  
+            approved_by = approval.approved_by.username if approval.approved_by else None
+            approved_at = approval.reviewed_at
+            reason = approval.reason  # ✅ เพิ่ม reason ที่ได้จาก HotelApproval
+        except HotelApproval.DoesNotExist:
+            approval_status = "pending"
+            approved_by = None
+            approved_at = None
+            reason = None  # ✅ ถ้าไม่มีให้ใส่เป็น None
+
+        hotel_data.append({
+            "id": hotel.id,
+            "name": hotel.name,
+            "registrant": hotel.owner.username,
+            "status": approval_status,
+            "approved_by": approved_by,
+            "approved_at": approved_at,
+            "reason": reason  # ✅ ใส่ reason ลงไป
+        })
+
+    return Response(hotel_data, status=status.HTTP_200_OK)
+
+
+
+# @api_view(['PATCH'])
+# @permission_classes([IsAuthenticated])  # Ensure only authenticated users can update the status
+# def update_hotel_status(request, hotel_id):
+#     try:
+#         hotel = Hotel.objects.get(id=hotel_id)
+#     except Hotel.DoesNotExist:
+#         return Response({'detail': 'Hotel not found'}, status=status.HTTP_404_NOT_FOUND)
+
+#     status_value = request.data.get('status')
+#     if status_value not in ['pending', 'confirmed', 'cancelled']:
+#         return Response({'detail': 'Invalid status value'}, status=status.HTTP_400_BAD_REQUEST)
+
+#     hotel.is_verified = status_value == 'confirmed'
+#     hotel.save()
+
+#     return Response({'status': hotel.is_verified}, status=status.HTTP_200_OK)
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])  # Ensure only authenticated users can update the status
+@permission_classes([IsAuthenticated])
 def update_hotel_status(request, hotel_id):
     try:
         hotel = Hotel.objects.get(id=hotel_id)
@@ -279,13 +335,28 @@ def update_hotel_status(request, hotel_id):
         return Response({'detail': 'Hotel not found'}, status=status.HTTP_404_NOT_FOUND)
 
     status_value = request.data.get('status')
+
     if status_value not in ['pending', 'confirmed', 'cancelled']:
         return Response({'detail': 'Invalid status value'}, status=status.HTTP_400_BAD_REQUEST)
 
-    hotel.is_verified = status_value == 'confirmed'
+    # ✅ อัปเดต status ของ Hotel
+    hotel.status = status_value  
+    hotel.is_verified = (status_value == 'confirmed')  # ✅ confirmed -> True, อื่นๆ -> False
     hotel.save()
 
-    return Response({'status': hotel.is_verified}, status=status.HTTP_200_OK)
+    # ✅ ตรวจสอบว่า HotelApproval มีอยู่หรือไม่
+    hotel_approval, created = HotelApproval.objects.get_or_create(hotel=hotel)
+
+    # ✅ ถ้ามีอยู่แล้วให้แก้ไข status
+    hotel_approval.status = status_value
+    hotel_approval.approved_by = request.user  # อัปเดตคนอนุมัติ (ใส่ None ถ้าไม่ระบุ)
+    hotel_approval.save()
+
+    return Response({
+        'hotel_status': hotel.status,
+        'approval_status': hotel_approval.status
+    }, status=status.HTTP_200_OK)
+
 
 
 @api_view(['GET'])
@@ -305,26 +376,6 @@ def hotel_approval_status(request, hotel_id):
         'reason': approval.reason,
         'reviewed_at': approval.reviewed_at
     }, status=status.HTTP_200_OK)
-
-@api_view(["PUT"])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def update_reservation_status(request, reservation_id):
-    
-    try:
-        reservation = Reservation.objects.get(id=reservation_id, pet_owner=request.user)
-
-        if reservation.status != "pending":
-            return Response({"detail": "Only pending reservations can be modified."}, status=status.HTTP_400_BAD_REQUEST)
-
-        serializer = ReservationSerializer(reservation, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    except Reservation.DoesNotExist:
-        return Response({"detail": "Reservation not found."}, status=status.HTTP_404_NOT_FOUND)
     
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
@@ -362,3 +413,66 @@ def pet_list_create(request):
         
         except Exception as e:
             return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from .models import HotelApproval
+
+@api_view(['PATCH'])  # ✅ ต้องมี @api_view
+@permission_classes([IsAuthenticated])
+def update_hotel_reason(request, hotel_id):
+    print("🚀 update_hotel_reason ถูกเรียกใช้")  # Debug
+
+    try:
+        hotel_approval = HotelApproval.objects.get(hotel_id=hotel_id)
+    except HotelApproval.DoesNotExist:
+        return Response({'detail': 'Hotel approval not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    reason_value = request.data.get('reason')
+    if not reason_value:
+        return Response({'detail': 'Reason field is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    hotel_approval.reason = reason_value
+    hotel_approval.save()
+
+    return Response({'status': 'Reason updated successfully', 'reason': hotel_approval.reason}, status=status.HTTP_200_OK)
+
+# ✅ API ดึงข้อมูลการจองทั้งหมด
+@api_view(['GET'])
+def get_all_reservations(request):
+    reservations = Reservation.objects.all()
+    serializer = ReservationSerializer(reservations, many=True)
+    return Response(serializer.data)
+
+
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from .models import Reservation
+from .serializers import ReservationSerializer
+
+@api_view(['PATCH'])
+@authentication_classes([TokenAuthentication])  # ✅ ใช้ Token Authentication
+@permission_classes([IsAuthenticated])  # ✅ ให้เฉพาะผู้ใช้ที่ล็อกอินแล้วเท่านั้น
+def update_reservation_status(request, reservation_id):
+    try:
+        reservation = Reservation.objects.get(id=reservation_id)
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # ✅ ตรวจสอบสิทธิ์เฉพาะ admin หรือเจ้าของ
+    if not request.user.is_staff and request.user != reservation.pet_owner:
+        return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
+    new_status = request.data.get("status")
+    reservation.status = new_status
+    reservation.save()
+
+    return Response({"success": "Status updated", "status": new_status})
+

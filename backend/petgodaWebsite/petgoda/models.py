@@ -36,7 +36,7 @@ class Usersdetail(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 
     created_at = models.DateTimeField(auto_now_add=True)
-    address = models.CharField(max_length=255, null=True, blank=True)  # Make location optional
+    address = models.CharField(max_length=255, null=True, blank=True)
 
     def get_full_name(self):
         return f"{self.user.first_name} {self.user.last_name}"

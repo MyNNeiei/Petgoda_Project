@@ -194,6 +194,28 @@ from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.validators import UniqueValidator
 
+from rest_framework import serializers
+from petgoda.models import Reservation
+
+from rest_framework import serializers
+from .models import Reservation
+
+from rest_framework import serializers
+from .models import Reservation
+
+class ReservationSerializer(serializers.ModelSerializer):
+    pet_owner = serializers.CharField(source="pet_owner.username")
+    pet = serializers.SerializerMethodField()
+    room = serializers.CharField(source="room.roomname")  # ✅ เปลี่ยนจาก name → roomname
+
+    class Meta:
+        model = Reservation
+        fields = "__all__"
+
+    def get_pet(self, obj):
+        return f"{obj.pet.name} ({obj.pet.get_pettype_display()}) - {obj.pet.weight} kg"
+
+
 # ✅ ใช้ UsersdetailSerializer ให้แสดงข้อมูลของผู้ใช้
 class UsersdetailSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
@@ -405,15 +427,6 @@ class HotelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Hotel
         fields = '__all__'
-
-class ReservationSerializer(serializers.ModelSerializer):
-    pet_owner_name = serializers.CharField(source="pet_owner.username", read_only=True)
-    pet_name = serializers.CharField(source="pet.name", read_only=True)
-    room_name = serializers.CharField(source="room.name", read_only=True)
-
-    class Meta:
-        model = Reservation
-        fields = "__all__"
 
 class PetSerializer(serializers.ModelSerializer):
     owner_name = serializers.CharField(source="owner.user.username", read_only=True)  # ✅ Show pet owner's username
