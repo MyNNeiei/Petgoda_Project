@@ -1,11 +1,12 @@
+import json
+import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from django.contrib.auth import authenticate
-from .serializers import RegisterSerializer, LoginSerializer
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -18,7 +19,7 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework import generics
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
-
+from django.shortcuts import get_object_or_404
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -178,18 +179,80 @@ def user_list(request):
 
     return Response(user_data)
 
+logger = logging.getLogger(__name__)
+# ✅ View to get all hotels
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def view_all_hotels(request):
+    """Retrieve all hotels"""
+    try:
+        hotels = Hotel.objects.all()
+        serializer = HotelSerializer(hotels, many=True, context={"request": request})
 
-@api_view(['GET'])
-@permission_classes([AllowAny])  # อนุญาตให้ทุกคนเข้าถึง
-def hotel_list(request):
-    hotels = Hotel.objects.all()  # ดึงข้อมูลโรงแรมทั้งหมด
-    serializer = HotelSerializer(hotels, many=True)  # ทำการ serialize ข้อมูลทั้งหมด
-    return Response(serializer.data)  # ส่งกลับข้อมูลทั้งหมดในรูปแบบ JSON
+        logger.info("✅ Successfully retrieved hotel data")  # ✅ Log success
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"❌ Error retrieving hotels: {str(e)}")  # ✅ Log error
+        return Response({"detail": "Failed to retrieve hotels", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def view_hotel_details(request, hotel_id):
+    """
+    ✅ GET: Retrieve hotel details along with available rooms.
+    """
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+    hotel_serializer = HotelSerializer(hotel, context={"request": request})
+    
+    # ✅ Fetch all rooms for the given hotel
+    rooms = Room.objects.filter(hotel=hotel)
+    room_serializer = RoomSerializer(rooms, many=True, context={"request": request})
+
+    return Response({
+        "hotel": hotel_serializer.data,
+        "rooms": room_serializer.data
+    }, status=status.HTTP_200_OK)
+    
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def create_hotel(request):
+    try:
+        data = request.data.copy()
+
+        if 'imgHotel' in request.FILES:
+            print(f"Received image: {request.FILES['imgHotel'].name} ({request.FILES['imgHotel'].size} bytes)")
+        else:
+            print("No image file received")
+
+        serializer = HotelSerializer(data=request.data, context={'request': request})
+        print("Data being sent to serializer:", data)
+        if serializer.is_valid():
+            serializer.save(owner=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print("Validation errors:", serializer.errors)  # แสดง errors เพื่อการ debug
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print("Exception:", str(e))  # แสดงข้อความ exception ที่เกิดขึ้น
+        return Response({"detail": "Failed to add hotel", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(["DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def delete_hotel(request, hotel_id):
+    
+    hotel = get_object_or_404(Hotel, id=hotel_id, owner=request.user)  # Ensure user owns the hotel
+    hotel.delete()
+    return Response({"detail": "Hotel deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+
+
 @api_view(["PUT"])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def update_reservation_status(request, reservation_id):
-    
     try:
         reservation = Reservation.objects.get(id=reservation_id, pet_owner=request.user)
 
@@ -214,8 +277,7 @@ def pet_list_views(request):
     ✅ POST: Add a new pet for the logged-in user
     """
     if request.method == "GET":
-        # ✅ Retrieve pets owned by the logged-in user
-        pets = Pet.objects.filter(owner=request.user.usersdetail)  # Assuming `Usersdetail` has OneToOne with User
+        pets = Pet.objects.filter(owner=request.user)
         serializer = PetSerializer(pets, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
         
@@ -223,22 +285,113 @@ def pet_list_views(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def pet_list_create(request):
-    """
-    ✅ GET: Retrieve all pets belonging to the logged-in user
-    ✅ POST: Add a new pet for the logged-in user
-    """
-    if request.method == "POST":
-        try:
-            # ✅ Assign the pet to the logged-in user
-            request.data["owner"] = request.user.usersdetail.id
-            serializer = PetSerializer(data=request.data)
+    try:
+        serializer = PetSerializer(data=request.data)
 
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+        if serializer.is_valid():
+            serializer.save(owner=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        except Exception as e:
-            return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    except Exception as e:
+        return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pet_list_delete(request, pet_id):
+    try:
+        pet = get_object_or_404(Pet, id=pet_id, owner=request.user)  # Ensure pet belongs to user
+        pet.delete()
+        return Response({"detail": "Pet deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"detail": "Failed to delete pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+def get_hotel_rooms(request, hotel_id):
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+    rooms = Room.objects.filter(hotel=hotel)
+    serializer = RoomSerializer(rooms, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def get_hotel_details(request, hotel_id):
+    """
+    ✅ Retrieve hotel details along with associated rooms.
+    """
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+    hotel_serializer = HotelSerializer(hotel, context={"request": request})
+
+    # ✅ Fetch rooms associated with this hotel
+    rooms = Room.objects.filter(hotel=hotel)
+    room_serializer = RoomSerializer(rooms, many=True, context={"request": request})
+
+    return Response({
+        "hotel": hotel_serializer.data,
+        "rooms": room_serializer.data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def update_hotel_details(request, hotel_id):
+    """
+    ✅ Update hotel details, including optional image upload and rooms.
+    """
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+
+    # ✅ Handle image upload separately
+    data = request.data.copy()
+    if "imgHotel" in request.FILES:
+        data["imgHotel"] = request.FILES["imgHotel"]
+
+    # ✅ Ensure 'rooms' is properly parsed
+    if "rooms" in data:
+        try:
+            data["rooms"] = json.loads(data["rooms"])
+        except json.JSONDecodeError:
+            return Response({"error": "Invalid JSON format for rooms"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ✅ Ensure 'facilities' is properly parsed
+    if "facilities" in data:
+        try:
+            data["facilities"] = json.loads(data["facilities"])
+        except json.JSONDecodeError:
+            return Response({"error": "Invalid JSON format for facilities"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = HotelSerializer(hotel, data=data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def hotel_rooms(request, hotel_id):
+    try:
+        hotel = Hotel.objects.get(id=hotel_id)
+    except Hotel.DoesNotExist:
+        return Response({'error': 'Hotel not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    rooms = Room.objects.filter(hotel=hotel)
+    serializer = RoomSerializer(rooms, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def hotel_facilities(request, hotel_id):
+    try:
+        facilities = FacilitiesHotel.objects.get(hotel_id=hotel_id)
+    except FacilitiesHotel.DoesNotExist:
+        return Response({'error': 'Facilities not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = FacilitiesHotelSerializer(facilities)
+    return Response(serializer.data)
