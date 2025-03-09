@@ -47,7 +47,7 @@ class Pet(models.Model):
         DOG = "D", "หมา"
         CAT = "C", "แมว"
 
-    owner = models.ForeignKey(Usersdetail, on_delete=models.PROTECT)
+    owner = models.ForeignKey(User, on_delete=models.PROTECT)
     name = models.CharField(max_length=255)
     pettype = models.CharField(max_length=1, choices=PetType.choices) 
     age = models.PositiveIntegerField(null=True, blank=True)
@@ -62,6 +62,9 @@ class Pet(models.Model):
     properties = models.CharField(max_length=255, null=True)
     def __str__(self):
         return f"{self.name} ({self.get_pettype_display()}) - {self.weight} kg"
+
+def hotel_upload_path(instance, filename):
+    return f'hotel_img/{instance.name}/{filename}'
 
 class Hotel(models.Model):
     owner = models.ForeignKey(User, on_delete=models.PROTECT)  # FK ไปยัง User
@@ -79,13 +82,11 @@ class Hotel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     total_review = models.PositiveIntegerField(default=0)
     rating = models.DecimalField(
-        max_digits=3, decimal_places=2, 
-        validators=[MinValueValidator(0.0)],  # ป้องกันค่าติดลบ
+        max_digits=3, decimal_places=2,   # ป้องกันค่าติดลบ
         default=0.0
     )
+    imgHotel = models.ImageField(upload_to=hotel_upload_path, default="hotel_img/default_hotel.jpg")
 
-    def __str__(self):
-        return f"{self.name} - {self.street_address}"
 
 
 class ImgRoom(models.Model):

@@ -1,11 +1,12 @@
+import json
+import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from django.contrib.auth import authenticate
-from .serializers import RegisterSerializer, LoginSerializer
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -36,6 +37,7 @@ from petgoda.models import Reservation
 # from petgoda.api.serializers import ReservationSerializer # type: ignore
 
 
+from django.shortcuts import get_object_or_404
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -207,6 +209,75 @@ def user_list(request):
         })
 
     return Response(user_data)
+
+logger = logging.getLogger(__name__)
+# ✅ View to get all hotels
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def view_all_hotels(request):
+    """Retrieve all hotels"""
+    try:
+        hotels = Hotel.objects.all()
+        serializer = HotelSerializer(hotels, many=True, context={"request": request})
+
+        logger.info("✅ Successfully retrieved hotel data")  # ✅ Log success
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"❌ Error retrieving hotels: {str(e)}")  # ✅ Log error
+        return Response({"detail": "Failed to retrieve hotels", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def view_hotel_details(request, hotel_id):
+    """
+    ✅ GET: Retrieve hotel details along with available rooms.
+    """
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+    hotel_serializer = HotelSerializer(hotel, context={"request": request})
+    
+    # ✅ Fetch all rooms for the given hotel
+    rooms = Room.objects.filter(hotel=hotel)
+    room_serializer = RoomSerializer(rooms, many=True, context={"request": request})
+
+    return Response({
+        "hotel": hotel_serializer.data,
+        "rooms": room_serializer.data
+    }, status=status.HTTP_200_OK)
+    
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def create_hotel(request):
+    try:
+        data = request.data.copy()
+
+        if 'imgHotel' in request.FILES:
+            print(f"Received image: {request.FILES['imgHotel'].name} ({request.FILES['imgHotel'].size} bytes)")
+        else:
+            print("No image file received")
+
+        serializer = HotelSerializer(data=request.data, context={'request': request})
+        print("Data being sent to serializer:", data)
+        if serializer.is_valid():
+            serializer.save(owner=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print("Validation errors:", serializer.errors)  # แสดง errors เพื่อการ debug
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print("Exception:", str(e))  # แสดงข้อความ exception ที่เกิดขึ้น
+        return Response({"detail": "Failed to add hotel", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(["DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def delete_hotel(request, hotel_id):
+    
+    hotel = get_object_or_404(Hotel, id=hotel_id, owner=request.user)  # Ensure user owns the hotel
+    hotel.delete()
+    return Response({"detail": "Hotel deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
 
 
 # views.py
@@ -386,8 +457,7 @@ def pet_list_views(request):
     ✅ POST: Add a new pet for the logged-in user
     """
     if request.method == "GET":
-        # ✅ Retrieve pets owned by the logged-in user
-        pets = Pet.objects.filter(owner=request.user.usersdetail)  # Assuming `Usersdetail` has OneToOne with User
+        pets = Pet.objects.filter(owner=request.user)
         serializer = PetSerializer(pets, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
         
@@ -395,26 +465,16 @@ def pet_list_views(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def pet_list_create(request):
-    """
-    ✅ GET: Retrieve all pets belonging to the logged-in user
-    ✅ POST: Add a new pet for the logged-in user
-    """
-    if request.method == "POST":
-        try:
-            # ✅ Assign the pet to the logged-in user
-            request.data["owner"] = request.user.usersdetail.id
-            serializer = PetSerializer(data=request.data)
+    try:
+        serializer = PetSerializer(data=request.data)
 
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+        if serializer.is_valid():
+            serializer.save(owner=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        except Exception as e:
-            return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+    except Exception as e:
+        return Response({"detail": "Failed to add pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -458,10 +518,11 @@ from .models import Reservation
 from .serializers import ReservationSerializer
 
 @api_view(['PATCH'])
-@authentication_classes([TokenAuthentication])  # ✅ ใช้ Token Authentication
-@permission_classes([IsAuthenticated])  # ✅ ให้เฉพาะผู้ใช้ที่ล็อกอินแล้วเท่านั้น
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
 def update_reservation_status(request, reservation_id):
     try:
+        print(f"🔍 Request received to update reservation ID: {reservation_id}")
         reservation = Reservation.objects.get(id=reservation_id)
     except Reservation.DoesNotExist:
         return Response({"error": "Reservation not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -471,8 +532,230 @@ def update_reservation_status(request, reservation_id):
         return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
 
     new_status = request.data.get("status")
+    print(f"🔄 Updating status to: {new_status}")
+
+    if new_status not in ['pending', 'confirmed', 'cancelled', 'completed']:
+        return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+
     reservation.status = new_status
     reservation.save()
+    print("✅ Status updated successfully!")
 
     return Response({"success": "Status updated", "status": new_status})
 
+
+    
+
+@api_view(["DELETE"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pet_list_delete(request, pet_id):
+    try:
+        pet = get_object_or_404(Pet, id=pet_id, owner=request.user)  # Ensure pet belongs to user
+        pet.delete()
+        return Response({"detail": "Pet deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"detail": "Failed to delete pet", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# @api_view(["GET"])
+# def get_hotel_rooms(request, hotel_id):
+#     hotel = get_object_or_404(Hotel, id=hotel_id)
+#     rooms = Room.objects.filter(hotel=hotel)
+#     serializer = RoomSerializer(rooms, many=True)
+#     return Response(serializer.data)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def get_hotel_details(request, hotel_id):
+    """
+    ✅ Retrieve hotel details along with associated rooms.
+    """
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+    hotel_serializer = HotelSerializer(hotel, context={"request": request})
+
+    # ✅ Fetch rooms associated with this hotel
+    rooms = Room.objects.filter(hotel=hotel)
+    room_serializer = RoomSerializer(rooms, many=True, context={"request": request})
+
+    return Response({
+        "hotel": hotel_serializer.data,
+        "rooms": room_serializer.data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def update_hotel_details(request, hotel_id):
+    """
+    ✅ Update hotel details, including optional image upload and rooms.
+    """
+    hotel = get_object_or_404(Hotel, id=hotel_id)
+
+    # ✅ Handle image upload separately
+    data = request.data.copy()
+    if "imgHotel" in request.FILES:
+        data["imgHotel"] = request.FILES["imgHotel"]
+
+    # ✅ Ensure 'rooms' is properly parsed
+    if "rooms" in data:
+        try:
+            data["rooms"] = json.loads(data["rooms"])
+        except json.JSONDecodeError:
+            return Response({"error": "Invalid JSON format for rooms"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ✅ Ensure 'facilities' is properly parsed
+    if "facilities" in data:
+        try:
+            data["facilities"] = json.loads(data["facilities"])
+        except json.JSONDecodeError:
+            return Response({"error": "Invalid JSON format for facilities"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = HotelSerializer(hotel, data=data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def hotel_rooms(request, hotel_id):
+    try:
+        hotel = Hotel.objects.get(id=hotel_id)
+    except Hotel.DoesNotExist:
+        return Response({'error': 'Hotel not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    rooms = Room.objects.filter(hotel=hotel)
+    room_data = []
+
+    for room in rooms:
+        available_spots = max(room.max_pets - room.current_pets_count_int, 0)  # ✅ คำนวณที่ว่าง
+
+        # ✅ ดึงข้อมูลสิ่งอำนวยความสะดวกของห้อง
+        facilities = {}
+        try:
+            room_facilities = FacilitiesRoom.objects.get(room=room)
+            facilities = FacilitiesRoomSerializer(room_facilities).data  # แปลงข้อมูลเป็น JSON
+        except FacilitiesRoom.DoesNotExist:
+            facilities = {}
+
+        room_data.append({
+            "id": room.id,
+            "roomname": room.roomname,
+            "size": room.size,
+            "price_per_night": room.price_per_night,
+            "max_pets": room.max_pets,
+            "current_pets_count_int": room.current_pets_count_int,
+            "available_spots": available_spots,  # ✅ จำนวนที่ว่าง
+            "facilities": facilities,  # ✅ สิ่งอำนวยความสะดวกของห้อง
+            "room_type": room.room_type,
+            "rating_decimal": room.rating_decimal,
+            "total_review": room.total_review,
+        })
+
+    return Response(room_data)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def hotel_facilities(request, hotel_id):
+    try:
+        facilities = FacilitiesHotel.objects.get(hotel_id=hotel_id)
+    except FacilitiesHotel.DoesNotExist:
+        return Response({'error': 'Facilities not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = FacilitiesHotelSerializer(facilities)
+    return Response(serializer.data)
+
+# @api_view(['POST'])
+# @authentication_classes([TokenAuthentication])
+# @permission_classes([IsAuthenticated])
+# def create_reservation(request):
+#     serializer = ReservationSerializer(data=request.data, context={'request': request})
+
+#     if serializer.is_valid():
+#         serializer.save(pet_owner=request.user)  # บันทึกเจ้าของอัตโนมัติ
+#         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+from rest_framework import viewsets
+from .models import Room
+from .serializers import RoomSerializer
+
+class RoomViewSet(viewsets.ModelViewSet):
+    queryset = Room.objects.select_related('facilities')  # ✅ ดึงข้อมูล Facilities
+    serializer_class = RoomSerializer
+
+from django.http import JsonResponse
+from django.db.models import Q
+from .models import Reservation, Room
+
+def check_room_availability(request):
+    hotel_id = request.GET.get("hotel")
+    room_id = request.GET.get("room")
+    check_in = request.GET.get("check_in")
+    check_out = request.GET.get("check_out")
+
+    if not all([hotel_id, room_id, check_in, check_out]):
+        return JsonResponse({"error": "Missing parameters"}, status=400)
+
+    # ค้นหาการจองที่มีช่วงวันที่ทับซ้อนกัน
+    overlapping_reservations = Reservation.objects.filter(
+        room_id=room_id,
+        check_in_date__lt=check_out,   # เช็คว่ามีการจองที่เริ่มต้นก่อนวัน Check-out
+        check_out_date__gt=check_in,   # เช็คว่ามีการจองที่สิ้นสุดหลังวัน Check-in
+        status__in=["pending", "confirmed"]  # ตรวจสอบเฉพาะการจองที่ยังใช้งานได้
+    ).count()
+
+    # ดึงข้อมูลห้องมาดูว่ามันเต็มไหม
+    room = Room.objects.get(id=room_id)
+    is_full = overlapping_reservations >= room.max_pets
+
+    return JsonResponse({"available": not is_full})
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import json
+from datetime import datetime
+from .models import Reservation, Room, Pet, User
+
+@method_decorator(csrf_exempt, name='dispatch')  # ✅ ปิด CSRF สำหรับ API นี้
+def create_reservation(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            
+            # ดึงค่าจาก request
+            user = User.objects.get(id=data["user_id"])  # ดึงข้อมูลเจ้าของสัตว์เลี้ยง
+            pet = Pet.objects.get(id=data["pet_id"])
+            room = Room.objects.get(id=data["room_id"])
+            
+            check_in_date = datetime.strptime(data["check_in"], "%Y-%m-%d")
+            check_out_date = datetime.strptime(data["check_out"], "%Y-%m-%d")
+            total_price = room.price_per_night * ((check_out_date - check_in_date).days)
+
+            # สร้างการจอง
+            reservation = Reservation.objects.create(
+                pet_owner=user,
+                pet=pet,
+                room=room,
+                check_in_date=check_in_date,
+                check_out_date=check_out_date,
+                totalprice=total_price,
+                status="pending",
+                payment_status="unpaid",
+                special_request=data.get("special_request", ""),
+                cancellation_reason=""
+            )
+
+            return JsonResponse({"message": "Reservation created successfully!", "reservation_id": reservation.id}, status=201)
+        
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse({"error": "Invalid request method"}, status=405)
