@@ -245,21 +245,38 @@ class UsersdetailSerializer(serializers.ModelSerializer):
 
 
 class FacilitiesHotelSerializer(serializers.ModelSerializer):
+    """✅ Serializes hotel facilities"""
+
     class Meta:
         model = FacilitiesHotel
-        fields = '__all__'
+        fields = "__all__"  # ✅ Includes all facility fields
+        read_only_fields = ["hotel"]
 
 class FacilitiesRoomSerializer(serializers.ModelSerializer):
+    """Serializes facilities available in a room"""
     class Meta:
         model = FacilitiesRoom
-        fields = '__all__'
+        fields = "__all__"
 
 class RoomSerializer(serializers.ModelSerializer):
-    facilities = FacilitiesRoomSerializer(read_only=True)
+    hotel_name = serializers.CharField(source="hotel.name", read_only=True)  # ✅ Display hotel name
+    facilities = FacilitiesRoomSerializer(read_only=True)  # ✅ Include room facilities
 
     class Meta:
         model = Room
-        fields = '__all__'
+        fields = [
+            "id", "hotel", "hotel_name", "roomname", "size", "price_per_night", 
+            "rating_decimal", "total_review", "availability_status", "max_pets", 
+            "current_pets_count_int", "room_type", "allow_pet_size", "allow_pet_type", 
+            "facilities"
+        ]
+        read_only_fields = ["hotel"]  # ✅ Prevent setting hotel manually
+
+    def validate_price_per_night(self, value):
+        """Ensure price is not negative"""
+        if value < 0:
+            raise serializers.ValidationError("Price per night must be a positive value.")
+        return value
 
 def hotel_upload_path(instance, filename):
     return f'hotel_img/{instance.name}/{filename}'
@@ -355,3 +372,4 @@ class RoomSerializer(serializers.ModelSerializer):
             "total_review", "availability_status", "max_pets", "current_pets_count_int", 
             "room_type", "allow_pet_size", "allow_pet_type", "images"
         ]
+        read_only_fields = ['hotel']

@@ -336,7 +336,6 @@ def get_hotel_details(request, hotel_id):
         "rooms": room_serializer.data
     }, status=status.HTTP_200_OK)
 
-
 @api_view(['PUT'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticatedOrReadOnly])
@@ -344,54 +343,133 @@ def update_hotel_details(request, hotel_id):
     """
     ✅ Update hotel details, including optional image upload and rooms.
     """
-    hotel = get_object_or_404(Hotel, id=hotel_id)
+    # เพิ่ม print statements เพื่อตรวจสอบข้อมูลที่ได้รับ
+    print(f"Updating hotel with ID: {hotel_id}")
+    print(f"Request data: {request.data}")
+    print(f"Request FILES: {request.FILES}")
+    
+    try:
+        hotel = get_object_or_404(Hotel, id=hotel_id)
+        print(f"Found hotel: {hotel.name} (ID: {hotel.id})")
 
-    # ✅ Handle image upload separately
-    data = request.data.copy()
-    if "imgHotel" in request.FILES:
-        data["imgHotel"] = request.FILES["imgHotel"]
+        # ✅ Handle image upload separately
+        data = request.data.copy()
+        # ถ้า imgHotel เป็น URL และไม่มีไฟล์ใหม่ส่งมา ให้ลบออกเพื่อไม่ให้ serializer ตรวจสอบ
+        if "imgHotel" in data and not request.FILES.get("imgHotel"):
+            # ตรวจสอบว่าเป็น URL หรือไม่
+            if isinstance(data["imgHotel"], str) and (data["imgHotel"].startswith('http://') or data["imgHotel"].startswith('https://')):
+                del data["imgHotel"]  # ลบออกเพื่อไม่ให้ serializer พยายามตรวจสอบ
+        
+        # ถ้ามีไฟล์ใหม่ ให้ใช้ไฟล์จาก request.FILES
+        if "imgHotel" in request.FILES:
+            data["imgHotel"] = request.FILES["imgHotel"]
+        
+        print(f"Data being sent to serializer: {data}")
+        
+        serializer = HotelSerializer(hotel, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            print("Hotel updated successfully!")
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            # พิมพ์รายละเอียดข้อผิดพลาดจาก serializer
+            print(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        # จับข้อผิดพลาดทั้งหมดที่อาจเกิดขึ้น
+        print(f"Exception occurred: {str(e)}")
+        print(f"Exception type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
-    # ✅ Ensure 'rooms' is properly parsed
-    if "rooms" in data:
-        try:
-            data["rooms"] = json.loads(data["rooms"])
-        except json.JSONDecodeError:
-            return Response({"error": "Invalid JSON format for rooms"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ✅ Ensure 'facilities' is properly parsed
-    if "facilities" in data:
-        try:
-            data["facilities"] = json.loads(data["facilities"])
-        except json.JSONDecodeError:
-            return Response({"error": "Invalid JSON format for facilities"}, status=status.HTTP_400_BAD_REQUEST)
-
-    serializer = HotelSerializer(hotel, data=data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-@api_view(['GET'])
+@api_view(["GET"])
 @authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticatedOrReadOnly])
+@permission_classes([IsAuthenticated])
 def hotel_rooms(request, hotel_id):
+    """Retrieve all rooms for a specific hotel"""
+    try:
+        rooms = Room.objects.filter(hotel_id=hotel_id)
+        serializer = RoomSerializer(rooms, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Room.DoesNotExist:
+        return Response({"error": "Rooms not found"}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def get_room_details(request, room_id=None):
+    """
+    ✅ GET: Retrieve room details. If room_id exists, it's edit mode; otherwise, it's create mode.
+    """
+    if room_id:
+        room = get_object_or_404(Room, id=room_id)
+        serializer = RoomSerializer(room)
+        return Response({"mode": "edit", "room": serializer.data}, status=status.HTTP_200_OK)
+    else:
+        return Response({"mode": "create", "room": None}, status=status.HTTP_200_OK)
+    
+@api_view(["GET", "POST"])
+def create_room(request, hotel_id):
+    """✅ GET: Retrieve rooms | ✅ POST: Create a room for a hotel"""
     try:
         hotel = Hotel.objects.get(id=hotel_id)
-    except Hotel.DoesNotExist:
-        return Response({'error': 'Hotel not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    rooms = Room.objects.filter(hotel=hotel)
-    serializer = RoomSerializer(rooms, many=True)
-    return Response(serializer.data)
 
+        if request.method == "GET":
+            rooms = Room.objects.filter(hotel=hotel)
+            serializer = RoomSerializer(rooms, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        if request.method == "POST":
+            print("ข้อมูลที่ได้รับจาก request:", request.data)
+            
+            room_serializer = RoomSerializer(data=request.data)
+            
+            if room_serializer.is_valid():
+                room = room_serializer.save(hotel=hotel)  # ✅ Assign hotel automatically
+                
+                # ✅ Save room facilities (if provided)
+                facilities_data = request.data.get("facilities", None)
+                if facilities_data:
+                    facilities_serializer = FacilitiesRoomSerializer(data=facilities_data)
+                    if facilities_serializer.is_valid():
+                        facilities_serializer.save(room=room)
+
+                return Response(room_serializer.data, status=status.HTTP_201_CREATED)
+            print(room_serializer.errors)
+            return Response(room_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(Hotel.DoesNotExist)
+    except Hotel.DoesNotExist:
+        return Response({"error": "Hotel not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticatedOrReadOnly])
-def hotel_facilities(request, hotel_id):
+def get_hotel_facilities(request, hotel_id):
+    """✅ GET: Retrieve hotel facilities"""
+    try:
+        facilities = FacilitiesHotel.objects.get(hotel_id=hotel_id)
+        serializer = FacilitiesHotelSerializer(facilities)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except FacilitiesHotel.DoesNotExist:
+        return Response({'error': 'Facilities not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['PUT'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def update_hotel_facilities(request, hotel_id):
+    """✅ PUT: Update hotel facilities"""
     try:
         facilities = FacilitiesHotel.objects.get(hotel_id=hotel_id)
     except FacilitiesHotel.DoesNotExist:
         return Response({'error': 'Facilities not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    serializer = FacilitiesHotelSerializer(facilities)
-    return Response(serializer.data)
+
+    serializer = FacilitiesHotelSerializer(facilities, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

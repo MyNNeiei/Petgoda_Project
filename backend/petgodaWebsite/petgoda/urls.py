@@ -18,8 +18,9 @@ urlpatterns = [
     path("hotels/", views.view_all_hotels, name="view_all_hotels_manage"),
     path('hotels/edit/<int:hotel_id>', views.update_hotel_details, name='manage_get_hotel_details'),
     path('hotels/<int:hotel_id>/rooms/', views.hotel_rooms, name='hotel_rooms'),
-    path('hotels/<int:hotel_id>/facilities/', views.hotel_facilities, name='hotel_facilities'),
-
+    path("hotels/rooms/<int:hotel_id>/create/", views.create_room, name="create_room"),
+    path('hotels/<int:hotel_id>/facilities/', views.get_hotel_facilities, name='hotel_facilities'),
+    path("hotels/<int:hotel_id>/facilities/update/", views.update_hotel_facilities, name="update_hotel_facilities"),
     #profile
     path('profile/edit/', views.edit_profile_view, name='profile_edit'),
     path("pet/create/", views.pet_list_create, name="pet_list_create"),
