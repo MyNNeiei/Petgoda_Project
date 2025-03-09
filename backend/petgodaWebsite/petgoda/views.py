@@ -14,6 +14,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.contrib.auth.password_validation import validate_password
 from .models import *
 from .serializers import *
+from django.utils.timezone import make_aware
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.authentication import TokenAuthentication
 from rest_framework import generics
@@ -34,8 +35,25 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 from rest_framework import status
 from petgoda.models import Reservation
-# from petgoda.api.serializers import ReservationSerializer # type: ignore
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
 
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from django.http import JsonResponse
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])  
+@permission_classes([IsAuthenticated])  
+def get_current_user(request):
+    user = request.user
+    return JsonResponse({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_staff": user.is_staff  # ✅ เพิ่ม is_staff
+    })
 
 from django.shortcuts import get_object_or_404
 @api_view(['POST'])
@@ -725,10 +743,14 @@ import json
 from datetime import datetime
 from .models import Reservation, Room, Pet, User
 
-@method_decorator(csrf_exempt, name='dispatch')  # ✅ ปิด CSRF สำหรับ API นี้
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])  # ✅ บังคับให้ต้องมี Token
 def create_reservation(request):
+    print("🔍 Received Authorization Header:", request.headers.get("Authorization"))  # ✅ Debug
+    print("🔍 User making request:", request.user)  # ✅ Debug
     if request.method == "POST":
         try:
+            print("📩 Request Body:", request.body)  # ✅ Debugging
             data = json.loads(request.body)
             
             # ดึงค่าจาก request
@@ -736,8 +758,8 @@ def create_reservation(request):
             pet = Pet.objects.get(id=data["pet_id"])
             room = Room.objects.get(id=data["room_id"])
             
-            check_in_date = datetime.strptime(data["check_in"], "%Y-%m-%d")
-            check_out_date = datetime.strptime(data["check_out"], "%Y-%m-%d")
+            check_in_date = make_aware(datetime.strptime(data["check_in"], "%Y-%m-%d"))
+            check_out_date = make_aware(datetime.strptime(data["check_out"], "%Y-%m-%d"))
             total_price = room.price_per_night * ((check_out_date - check_in_date).days)
 
             # สร้างการจอง

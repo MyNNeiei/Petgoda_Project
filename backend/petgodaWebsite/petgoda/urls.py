@@ -43,6 +43,8 @@ urlpatterns = [
     path("pet/", views.pet_list_views, name="pet_list_views"),
     # path("reserve/<int:reservation_id>/", views.update_reservation_status, name="update_reservation"),
     path("reservations/check_availability/", views.check_room_availability, name="check_room_availability"),
+    path("users/me/", views.get_current_user, name="get_current_user"),  # ✅ เพิ่ม API ใหม่
+
 ]
 # ✅ Serve media files in debug mode
 if settings.DEBUG:
