@@ -30,17 +30,17 @@
 <h5>1. Create Django a virtual environment</h5>
 (Windows)
 ```bash
-cd backend
-pip install virtualenv
-py -m venv myvenv
-myvenv\Scripts\activate.bat
+cd backend<br>
+pip install virtualenv<br>
+py -m venv myvenv<br>
+myvenv\Scripts\activate.bat<br>
 ```
 (MacOS)
 ```bash
-cd backend
-pip install virtualenv
-py -m venv myvenv
-source myvenv/bin/activate
+cd backend<br>
+pip install virtualenv<br>
+py -m venv myvenv<br>
+source myvenv/bin/activate<br>
 ```
 <h5>2. เข้าสู่โฟลเดอร์ backend แล้วรันคำสั่งต่อไปนี้เพื่อติดตั้ง Python dependencies ทั้งหมด:</h5>
 ```bash
