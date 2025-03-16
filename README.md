@@ -48,7 +48,9 @@ pip install -r requirements.txt
 <h5>3. สร้างไฟล์ .env ใน folder backend</h5>
 <h5>4. Run the Backend (ต้องอยู่ใน Folder backend)</h5>
 ```bash
-cd backend
-myvenv\Scripts\activate.bat # ถ้ายังไม่ได้ activate
-python manage.py runserver
+<ul>
+  <li>cd backend</li>
+  <li>myvenv\Scripts\activate.bat # ถ้ายังไม่ได้ activate</li>
+  <li>python manage.py runserver</li>
+</ul>
 ```
