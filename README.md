@@ -45,8 +45,8 @@ source myvenv/bin/activate
 <h5>2. เข้าสู่โฟลเดอร์ backend แล้วรันคำสั่งต่อไปนี้เพื่อติดตั้ง Python dependencies ทั้งหมด:</h5>
 ```bash
 cd petgodaWebsite
-pip install -r requirements.txt
-หากลงแล้วเกิด Error ให้ลงตามลำดับดังนี้
+pip install -r requirements.txt<br>
+หากลงแล้วเกิด Error ให้ลงตามลำดับดังนี้<br>
 <ul>
 <li>pip install django</li>
 <li>pip install djangorestframework</li>
