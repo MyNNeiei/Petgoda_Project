@@ -5,6 +5,42 @@ from django.contrib.auth import authenticate
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from rest_framework.validators import UniqueValidator
+
+from rest_framework import serializers
+from petgoda.models import Reservation
+
+from rest_framework import serializers
+from .models import Reservation
+
+from rest_framework import serializers
+from .models import Reservation
+
+from rest_framework import viewsets
+
+
+class ReservationSerializer(serializers.ModelSerializer):
+    pet_owner = serializers.CharField(source="pet_owner.username")
+    pet = serializers.SerializerMethodField()
+    room = serializers.CharField(source="room.roomname")
+    check_in_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M", required=False)
+    check_out_date = serializers.DateTimeField(format="%Y-%m-%d %H:%M", required=False)
+    created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M", required=False)
+    updated_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M", required=False)
+    total_price = serializers.SerializerMethodField()  # ✅ เพิ่ม field นี้
+
+    class Meta:
+        model = Reservation
+        fields = "__all__"
+        
+    def get_total_price(self, obj):
+        return obj.totalprice 
+
+    def get_pet(self, obj):
+        return f"{obj.pet.name} ({obj.pet.get_pettype_display()}) - {obj.pet.weight} kg"
+    
+    
+
+
 from datetime import date
 from django.shortcuts import get_object_or_404
 # ✅ ใช้ UsersdetailSerializer ให้แสดงข้อมูลของผู้ใช้
@@ -312,21 +348,16 @@ class HotelSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-class ReservationSerializer(serializers.ModelSerializer):
-    pet_owner_name = serializers.CharField(source="pet_owner.username", read_only=True)
-    pet_name = serializers.CharField(source="pet.name", read_only=True)
-    room_name = serializers.CharField(source="room.name", read_only=True)
-
-    class Meta:
-        model = Reservation
-        fields = "__all__"
-
 class PetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pet
         fields = ["id", "name", "pettype", "age", "birth_date", "weight", "height", "allegic", "properties", "owner"]
         read_only_fields = ["owner"]  # ✅ Prevent manual owner assignment
 
+class UserStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['status']  # แค่ฟิลด์สถานะที่ต้องการอัปเดต
         def validate_birth_date(self, value):
             
             today = date.today()
@@ -362,14 +393,6 @@ class ImgRoomSerializer(serializers.ModelSerializer):
         model = ImgRoom
         fields = ["id", "image", "description"]
 
-class RoomSerializer(serializers.ModelSerializer):
-    images = ImgRoomSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Room
-        fields = [
-            "id", "hotel", "roomname", "size", "price_per_night", "rating_decimal", 
-            "total_review", "availability_status", "max_pets", "current_pets_count_int", 
-            "room_type", "allow_pet_size", "allow_pet_type", "images"
-        ]
-        read_only_fields = ['hotel']
+class RoomViewSet(viewsets.ModelViewSet):
+    queryset = Room.objects.all()
+    serializer_class = RoomSerializer

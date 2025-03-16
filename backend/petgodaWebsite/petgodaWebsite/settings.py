@@ -12,7 +12,14 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+import os
+from dotenv import load_dotenv
+from urllib.parse import urlparse
 
+load_dotenv()
+
+# Replace the DATABASES section of your settings.py with this
+tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,7 +33,8 @@ SECRET_KEY = 'django-insecure-i^l5tkv+md1*o1(0b#i5b$885cxae9-(y93!yj1wjnu9m_uwwp
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
 
 # Media settings
 MEDIA_URL = '/media/'
@@ -83,14 +91,17 @@ WSGI_APPLICATION = 'petgodaWebsite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# Add these at the top of your settings.py
+
+
 DATABASES = {
     'default': {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "Petgodadb",
-        "USER": "postgres",
-        "PASSWORD": "petgodapassword101",
-        "HOST": "petgodadb.crqksaygshrs.ap-southeast-7.rds.amazonaws.com",
-        "PORT": "5432",
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': tmpPostgres.path.replace('/', ''),
+        'USER': tmpPostgres.username,
+        'PASSWORD': tmpPostgres.password,
+        'HOST': tmpPostgres.hostname,
+        'PORT': 5432,
     }
 }
 
@@ -146,11 +157,17 @@ REST_FRAMEWORK = {
     ),
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     # Add your production frontend URL here
-# ]
+
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # ✅ อนุญาต Next.js Frontend
+    "http://127.0.0.1:3000",
+]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization']
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",  # ✅ อนุญาต Next.js
+    "http://127.0.0.1:3000",
+]
