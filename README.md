@@ -46,7 +46,7 @@ source myvenv/bin/activate
 cd petgodaWebsite
 pip install -r requirements.txt
 ```
-<h5>3. สร้างไฟล์ .env ใน folder backend</h5>
+<h5>3. สร้างไฟล์ .env ใน folder backend/petgodaWebsite/</h5>
 <h5>4. Run the Backend (ต้องอยู่ใน Folder backend)</h5>
 ```bash
 <ul>
