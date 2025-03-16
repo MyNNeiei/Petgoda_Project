@@ -43,6 +43,7 @@ source myvenv/bin/activate
 ```
 <h5>2. เข้าสู่โฟลเดอร์ backend แล้วรันคำสั่งต่อไปนี้เพื่อติดตั้ง Python dependencies ทั้งหมด:</h5>
 ```bash
+cd petgodaWebsite
 pip install -r requirements.txt
 ```
 <h5>3. สร้างไฟล์ .env ใน folder backend</h5>
