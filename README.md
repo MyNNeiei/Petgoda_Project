@@ -23,6 +23,7 @@
   <li>djangorestframework-simplejwt==5.3.1</li>
   <li>python-dotenv==1.0.1</li>
   <li>psycopg2-binary==2.9.9</li>
+  <li>pillow==11.1.0</li>
 </ul>
 
 <h3>How to Run Back-End</h3>
@@ -45,6 +46,16 @@ source myvenv/bin/activate
 ```bash
 cd petgodaWebsite
 pip install -r requirements.txt
+หากลงแล้วเกิด Error ให้ลงตามลำดับดังนี้
+<ul>
+<li>pip install django</li>
+<li>pip install djangorestframework</li>
+<li>pip install djangorestframework-simplejwt</li>
+<li>pip install django-cors-headers</li>
+<li>pip install dotenv</li>
+<li>pip install psycopg2-binary</li>
+<li>pip install pillow</li>
+</ul>
 ```
 <h5>3. สร้างไฟล์ .env ใน folder backend/petgodaWebsite/</h5>
 <h5>4. Run the Backend (ต้องอยู่ใน Folder backend)</h5>
