@@ -19,8 +19,36 @@
 <ul>
   <li>Django==5.1.4</li>
   <li>django-cors-headers==4.6.0</li>
-  <li>Shadcn : library สำหรับ Next.js Component</li>
-  <li>tailwindcss-animate, class-variance-authority, clsx, tailwind-merge, lucide-react: ส่วนขยายของ Tailwind สำหรับ animations และ components</li>
+  <li>djangorestframework==3.15.1</li>
+  <li>djangorestframework-simplejwt==5.3.1</li>
+  <li>python-dotenv==1.0.1</li>
+  <li>psycopg2-binary==2.9.9</li>
 </ul>
 
-<h3>How to Run the Website</h3>
+<h3>How to Run Back-End</h3>
+<h5>1. Create Django a virtual environment</h5>
+(Windows)
+```bash
+cd backend
+pip install virtualenv
+py -m venv myvenv
+myvenv\Scripts\activate.bat
+```
+(MacOS)
+```bash
+cd backend
+pip install virtualenv
+py -m venv myvenv
+source myvenv/bin/activate
+```
+<h5>2. เข้าสู่โฟลเดอร์ backend แล้วรันคำสั่งต่อไปนี้เพื่อติดตั้ง Python dependencies ทั้งหมด:</h5>
+```bash
+pip install -r requirements.txt
+```
+<h5>3. สร้างไฟล์ .env ใน folder backend</h5>
+<h5>4. Run the Backend (ต้องอยู่ใน Folder backend)</h5>
+```bash
+cd backend
+myvenv\Scripts\activate.bat # ถ้ายังไม่ได้ activate
+python manage.py runserver
+```
